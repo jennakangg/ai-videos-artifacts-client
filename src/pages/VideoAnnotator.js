@@ -61,20 +61,36 @@ const VideoAnnotator = () => {
     const interpolateBoxes = (fromFrame, toFrame, fromBoxes, toBoxes) => {
         const result = {};
         const steps = toFrame - fromFrame;
-        for (let i = 1; i < steps; i++) {
-            const t = i / steps;
-            result[fromFrame + i] = fromBoxes.map((box, index) => {
-                const next = toBoxes[index] || box;
-                return {
-                    x: box.x + (next.x - box.x) * t,
-                    y: box.y + (next.y - box.y) * t,
-                    w: box.w + (next.w - box.w) * t,
-                    h: box.h + (next.h - box.h) * t,
-                    label: box.label,
+        const interpolatedBoxesByLabel = {};
+
+        // Create a map of boxes by label
+        const fromMap = {};
+        const toMap = {};
+        fromBoxes.forEach(box => { fromMap[box.label] = box });
+        toBoxes.forEach(box => { toMap[box.label] = box });
+
+        // Interpolate only for matching labels
+        for (const label in fromMap) {
+            if (!(label in toMap)) continue;
+
+            const from = fromMap[label];
+            const to = toMap[label];
+
+            for (let i = 1; i < steps; i++) {
+                const t = i / steps;
+                const frame = fromFrame + i;
+                if (!result[frame]) result[frame] = [];
+                result[frame].push({
+                    x: from.x + (to.x - from.x) * t,
+                    y: from.y + (to.y - from.y) * t,
+                    w: from.w + (to.w - from.w) * t,
+                    h: from.h + (to.h - from.h) * t,
+                    label: label,
                     interpolated: true,
-                };
-            });
+                });
+            }
         }
+
         return result;
     };
 
@@ -161,7 +177,7 @@ const VideoAnnotator = () => {
             const updated = { ...prev };
             if (!updated[frame]) updated[frame] = [];
 
-            // ❗️Only allow one box per label per frame
+            // Only allow one box per label per frame
             updated[frame] = updated[frame].filter(box => box.label !== newBox.label);
 
             updated[frame].push(newBox);
@@ -236,6 +252,9 @@ const VideoAnnotator = () => {
                     ref={videoRef}
                     src={sample_video}
                     controls
+                    controlsList="nodownload noplaybackrate nofullscreen noremoteplayback"
+                    disablePictureInPicture
+                    muted
                     onLoadedMetadata={() => {
                         const video = videoRef.current;
                         const canvas = canvasRef.current;

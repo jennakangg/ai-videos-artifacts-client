@@ -205,14 +205,34 @@ const VideoAnnotator = () => {
     };
 
     const exportAnnotations = () => {
-        const json = JSON.stringify(annotations, null, 2);
+        const video = videoRef.current;
+        const fps = video.frameRate || 30;
+
+        const exportData = Object.entries(annotations).flatMap(([frameStr, boxes]) => {
+            const frame = parseInt(frameStr, 10);
+            const time = frame / fps;
+
+            return boxes.map((box) => ({
+                time: parseFloat(time.toFixed(3)), // seconds, to 3 decimal places
+                frame,
+                label: box.label,
+                x: box.x,
+                y: box.y,
+                w: box.w,
+                h: box.h,
+                interpolated: box.interpolated || false,
+            }));
+        });
+
+        const json = JSON.stringify(exportData, null, 2);
         const blob = new Blob([json], { type: 'application/json' });
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = 'annotations.json';
+        a.download = 'annotations_with_timestamps.json';
         a.click();
         URL.revokeObjectURL(a.href);
     };
+
 
     const seekToFrame = (offset) => {
         const video = videoRef.current;

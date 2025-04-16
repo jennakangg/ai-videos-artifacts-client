@@ -106,6 +106,9 @@ const VideoAnnotator = (props) => {
     };
 
     const handleMouseDown = (e) => {
+        const video = videoRef.current;
+        video.pause(); // ⏸️ Pause the video right when the user clicks
+
         const { x, y } = getRelativeCoords(e);
         const frame = getCurrentFrame();
         const boxes = annotations[frame] || [];
@@ -124,6 +127,7 @@ const VideoAnnotator = (props) => {
         setStartPos({ x, y });
         setDrawing(true);
     };
+
 
     const handleMouseMove = (e) => {
         const { x, y } = getRelativeCoords(e);

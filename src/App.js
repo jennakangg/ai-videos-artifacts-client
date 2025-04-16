@@ -1,7 +1,9 @@
 import {BrowserRouter as Router, Navigate, Route, Routes} from "react-router-dom";
 import Login from "./pages/Login";
 import { ThemeProvider, createTheme } from '@mui/material/styles';
-import VideoAnnotator from "./pages/VideoAnnotator";
+import ExperimentManager from "./pages/ExperimentManager";
+import AnnotationManager from "./pages/AnnotationManager";
+import Complete from "./pages/Complete";
 
 
 const THEME = createTheme({
@@ -17,10 +19,11 @@ function App() {
           <div>
             <Routes>
               <Route path="/">
-                <Route index element={<Navigate to="/videoannotator" />} />
+                <Route index element={<Navigate to="/login" />} />
                 <Route path ="/login"  element={<Login />} />
-                <Route path ="/videoannotator"
-                       element={ <VideoAnnotator videoRef="./img/test_video.mp4" />} />
+                <Route path ="/experimentmanager"  element={<ExperimentManager />} />
+                <Route path ="/annotationmanager"  element={<AnnotationManager />} />
+                <Route path="/complete" element={<Complete />} />
               </Route>
             </Routes>
           </div>

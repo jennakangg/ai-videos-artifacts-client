@@ -1,11 +1,11 @@
 import React, { useRef, useState, useEffect } from 'react';
-import sample_video from './img/IMG_2561.mov';
-
-const labels = ['Person', 'Car', 'Dog'];
-const colors = ['red', 'green', 'blue'];
+import {ANNOTATION_STATE} from "../utils/Constants";
+import { FormControl, InputLabel, Select, MenuItem, Button} from '@mui/material';
+import {uploadTrial} from "../fetch/fetch";
 
 const VIDEO_PLAYER_BOTTOM_OFFSET = 70
-const VideoAnnotator = () => {
+const VideoAnnotator = (props) => {
+    let labels = props.labels
     const videoRef = useRef(null);
     const canvasRef = useRef(null);
     const [currentLabel, setCurrentLabel] = useState(labels[0]);
@@ -18,6 +18,18 @@ const VideoAnnotator = () => {
     const [history, setHistory] = useState([]);
     const [redoStack, setRedoStack] = useState([]);
     const [currentFrame, setCurrentFrame] = useState(0);
+
+    const generateColors = (labels) => {
+        const baseColors = ['red', 'green', 'blue', 'orange', 'purple', 'cyan', 'magenta', 'lime', 'yellow', 'pink', 'brown', 'gray'];
+        const labelColors = {};
+        labels.forEach((label, index) => {
+            // Wrap around if there are more labels than base colors
+            labelColors[label] = baseColors[index % baseColors.length];
+        });
+        return labelColors;
+    };
+
+    const labelColorMap = generateColors(labels);
 
     const getCurrentFrame = () => {
         const video = videoRef.current;
@@ -47,7 +59,7 @@ const VideoAnnotator = () => {
             const w = box.w * scaleX;
             const h = box.h * scaleY;
 
-            ctx.strokeStyle = colors[labels.indexOf(box.label)] || 'black';
+            ctx.strokeStyle = labelColorMap[box.label] || 'black';
             ctx.lineWidth = 2;
             if (box.interpolated) ctx.setLineDash([4, 4]);
             ctx.strokeRect(x, y, w, h);
@@ -61,7 +73,6 @@ const VideoAnnotator = () => {
     const interpolateBoxes = (fromFrame, toFrame, fromBoxes, toBoxes) => {
         const result = {};
         const steps = toFrame - fromFrame;
-        const interpolatedBoxesByLabel = {};
 
         // Create a map of boxes by label
         const fromMap = {};
@@ -139,7 +150,7 @@ const VideoAnnotator = () => {
             const y1 = y * scaleY;
 
             ctx.setLineDash([2, 2]);
-            ctx.strokeStyle = colors[labels.indexOf(currentLabel)] || 'black';
+            ctx.strokeStyle = labelColorMap[currentLabel] || 'black';
             ctx.lineWidth = 2;
             ctx.strokeRect(
                 Math.min(x0, x1),
@@ -233,6 +244,43 @@ const VideoAnnotator = () => {
         URL.revokeObjectURL(a.href);
     };
 
+    const submitAnnotationsToDB = () => {
+        const video = videoRef.current;
+        const fps = video.frameRate || 30;
+        const exportData = Object.entries(annotations).flatMap(([frameStr, boxes]) => {
+        const frame = parseInt(frameStr, 10);
+        const time = frame / fps;
+
+        return boxes.map((box) => ({
+            time: parseFloat(time.toFixed(3)), // seconds
+            frame,
+            label: box.label,
+            x: box.x,
+            y: box.y,
+            w: box.w,
+            h: box.h,
+            interpolated: box.interpolated || false,
+        }));
+        });
+
+        const timestamp = new Date().toISOString();
+        const userID = props.userID
+        const videoID = props.videoID
+
+        const userVideoAnnotationID = `${userID}_${videoID}_${timestamp}`;
+
+        const request = {
+            userTrialID: userVideoAnnotationID,
+            userID: userID,
+            videoID: videoID,
+            timestamp: timestamp,
+            annotation: JSON.stringify(exportData),
+            labels: JSON.stringify(labels),
+        };
+
+        uploadTrial(request, props.setDidNetworkFail)
+    }
+
 
     const seekToFrame = (offset) => {
         const video = videoRef.current;
@@ -269,12 +317,13 @@ const VideoAnnotator = () => {
         <div style={{ width: '100vw', height: '100vh', position: 'relative' }}>
             <div style={{ position: 'relative', display: 'inline-block' }}>
                 <video
+                    id="annotationVideo"
                     ref={videoRef}
-                    src={sample_video}
                     controls
                     controlsList="nodownload noplaybackrate nofullscreen noremoteplayback"
                     disablePictureInPicture
                     muted
+                    autoPlay
                     onLoadedMetadata={() => {
                         const video = videoRef.current;
                         const canvas = canvasRef.current;
@@ -285,7 +334,11 @@ const VideoAnnotator = () => {
                     }}
                     onTimeUpdate={drawBoxes}
                     style={{ display: 'block' }}
-                />
+                >
+                    <source id="annotationVideoSrc" type="video/mp4"
+                            src={props.videoSrc}
+                    ></source>
+                </video>
                 <canvas
                     ref={canvasRef}
                     onMouseDown={handleMouseDown}
@@ -296,24 +349,39 @@ const VideoAnnotator = () => {
                         top: 0,
                         left: 0,
                         pointerEvents: 'auto',
-                        zIndex: 1,
+                        // zIndex: 1,
                         // background:"black",
                         height: `${videoRef.current?.offsetHeight - VIDEO_PLAYER_BOTTOM_OFFSET}px`
                     }}
                 />
             </div>
-
             <div style={{ position: 'absolute', bottom: 10, right: 10, zIndex: 10, backgroundColor: '#fff8', padding: '8px' }}>
-                <select value={currentLabel} onChange={(e) => setCurrentLabel(e.target.value)}>
-                    {labels.map((label) => (
-                        <option key={label} value={label}>{label}</option>
-                    ))}
-                </select>
-                <button onClick={undo} style={{ marginLeft: 10 }}>Undo</button>
-                <button onClick={redo} style={{ marginLeft: 5 }}>Redo</button>
-                <button onClick={exportAnnotations} style={{ marginLeft: 5 }}>Export</button>
-                <button onClick={() => seekToFrame(-1)} style={{ marginLeft: 10 }}>Prev Frame</button>
-                <button onClick={() => seekToFrame(1)} style={{ marginLeft: 5 }}>Next Frame</button>
+                <FormControl size="small" sx={{ minWidth: 120 }}>
+                    <InputLabel id="label-select">Label</InputLabel>
+                    <Select
+                        labelId="label-select"
+                        id="label-select-dropdown"
+                        value={currentLabel}
+                        label="Label"
+                        onChange={(e) => setCurrentLabel(e.target.value)}
+                    >
+                        {labels.map((label) => (
+                            <MenuItem key={label} value={label}>
+                                {label}
+                            </MenuItem>
+                        ))}
+                    </Select>
+                </FormControl>
+                <Button onClick={undo} style={{ marginLeft: 10 }}>Undo</Button>
+                <Button onClick={redo} style={{ marginLeft: 5 }}>Redo</Button>
+                {/*<Button onClick={exportAnnotations} style={{ marginLeft: 5 }}>Export</Button>*/}
+                <Button onClick={() => seekToFrame(-1)} style={{ marginLeft: 10 }}>Prev Frame</Button>
+                <Button onClick={() => seekToFrame(1)} style={{ marginLeft: 5 }}>Next Frame</Button>
+                <Button onClick={() => {
+                    submitAnnotationsToDB()
+                    props.setAnnotationState(ANNOTATION_STATE.WAITING_PAGE_FOR_NEXT)
+                }}
+                        style={{ marginLeft: 5 }}>Submit</Button>
             </div>
         </div>
     );

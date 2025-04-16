@@ -8,30 +8,30 @@ const Login = () => {
     const [isError, setIsError] = useState(false)
     const navigate = useNavigate();
 
-    // const handleSignIn = () => {
-    //     fetch(`${ENDPOINT}/users/generateusertrials/${userIDInput}`).then((response) => {
-    //         if (!response.ok) {
-    //             setIsError(true)
-    //         }
-    //         return response.json();
-    //     })
-    //         .then((data) => {
-    //             if (data.status !== 500) {
-    //                 navigate(
-    //                     '../introconsent',
-    //                     {
-    //                         state: {
-    //                             userID: userIDInput,
-    //                             sequence : data,
-    //                             numBlocks: data.length
-    //                         }
-    //                     })
-    //             }
-    //         })
-    //         .catch((error) => {
-    //             console.error('Error fetching search results: ', error);
-    //         })
-    // }
+    const handleSignIn = () => {
+        fetch(`${ENDPOINT}/users/generateusertrials/${userIDInput}`).then((response) => {
+            if (!response.ok) {
+                setIsError(true)
+            }
+            return response.json();
+        })
+            .then((data) => {
+                if (data.status !== 500) {
+                    navigate(
+                        '../experimentmanager',
+                        {
+                            state: {
+                                userID: userIDInput,
+                                videoIDs : data,
+                                numBlocks: data.length
+                            }
+                        })
+                }
+            })
+            .catch((error) => {
+                console.error('Error fetching search results: ', error);
+            })
+    }
 
     const navToAnnotateVideo = () => {
         navigate('../videoannotator')
@@ -66,11 +66,10 @@ const Login = () => {
                     display: 'flex',
                 }}>
                     <Button
-                        variant="contained" onClick={navToAnnotateVideo}>Sign In</Button>
+                        variant="contained" onClick={handleSignIn}>Sign In</Button>
                 </Box>
             </Box>
         </div>
-
     );
 }
 

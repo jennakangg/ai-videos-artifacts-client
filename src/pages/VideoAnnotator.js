@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import {ANNOTATION_STATE} from "../utils/Constants";
-import { FormControl, InputLabel, Select, MenuItem, Button} from '@mui/material';
+import {FormControl, InputLabel, Select, MenuItem, Button, Typography} from '@mui/material';
 import {uploadTrial} from "../fetch/fetch";
 
 const VIDEO_PLAYER_BOTTOM_OFFSET = 70
@@ -74,13 +74,13 @@ const VideoAnnotator = (props) => {
         const result = {};
         const steps = toFrame - fromFrame;
 
-        // Create a map of boxes by label
+        // map boxes by label
         const fromMap = {};
         const toMap = {};
         fromBoxes.forEach(box => { fromMap[box.label] = box });
         toBoxes.forEach(box => { toMap[box.label] = box });
 
-        // Interpolate only for matching labels
+        // only interpolate for things with same label
         for (const label in fromMap) {
             if (!(label in toMap)) continue;
 
@@ -317,6 +317,23 @@ const VideoAnnotator = (props) => {
         setAnnotations((prev) => ({ ...prev, ...interpolated }));
     }, [manualFrames]);
 
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault(); // Prevent scrolling
+                const video = videoRef.current;
+                if (video.paused) {
+                    video.play();
+                } else {
+                    video.pause();
+                }
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, []);
+
     return (
         <div style={{ width: '100vw', height: '100vh', position: 'relative' }}>
             <div style={{ position: 'relative', display: 'inline-block' }}>
@@ -357,7 +374,105 @@ const VideoAnnotator = (props) => {
                         // background:"black",
                         height: `${videoRef.current?.offsetHeight - VIDEO_PLAYER_BOTTOM_OFFSET}px`
                     }}
+                    onLoadedMetadata={() => {
+                        const video = videoRef.current;
+                        const canvas = canvasRef.current;
+                        if (video && canvas) {
+                            canvas.width = video.videoWidth;
+                            canvas.height = video.videoHeight;
+                        }
+                    }}
                 />
+            </div>
+            <div style={{
+                position: 'absolute',
+                right: 10,
+                top: 10,
+                bottom: 100,
+                overflowY: 'auto',
+                backgroundColor: '#fff8',
+                padding: '10px',
+                width: '240px',
+                zIndex: 10,
+                borderRadius: '8px'
+            }}>
+                <Typography
+                    style={{ margin: '0 0 8px 0' }}
+                >Labeled Frames</Typography>
+                {[...manualFrames].sort((a, b) => a - b).map((frame) => (
+                    <div key={frame} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                        <Button
+                            style={{ background: 'none', border: 'none', color: 'blue', cursor: 'pointer' }}
+                            onClick={() => {
+                                const video = videoRef.current;
+                                const fps = video.frameRate || 30;
+                                video.currentTime = frame / fps;
+                            }}
+                        >
+                            {frame}
+                        </Button>
+                        <Button
+                            style={{ background: 'none', border: 'none', color: 'red', cursor: 'pointer' }}
+                            onClick={() => {
+                                setAnnotations((prevAnnotations) => {
+                                    const updated = { ...prevAnnotations };
+                                    delete updated[frame];
+
+                                    const updatedManualFrames = new Set(manualFrames);
+                                    updatedManualFrames.delete(frame);
+
+                                    const sorted = [...updatedManualFrames].sort((a, b) => a - b);
+
+                                    // Find neighbors of the deleted frame
+                                    const frameIndex = sorted.findIndex(f => f > frame);
+                                    const prevNeighbor = sorted[frameIndex - 1];
+                                    const nextNeighbor = sorted[frameIndex];
+
+                                    // Start fresh: keep only manual frames
+                                    const cleaned = {};
+                                    for (const f of updatedManualFrames) {
+                                        cleaned[f] = updated[f];
+                                    }
+
+                                    // Remove old interpolated frames between prev and next
+                                    for (let f = prevNeighbor + 1; f < nextNeighbor; f++) {
+                                        if (updated[f]?.every(box => box.interpolated)) {
+                                            // fully interpolated frame — delete it
+                                            delete cleaned[f];
+                                        }
+                                    }
+
+                                    // Reinterpolate between remaining neighbors
+                                    let reinterpolated = {};
+                                    if (
+                                        prevNeighbor !== undefined &&
+                                        nextNeighbor !== undefined &&
+                                        cleaned[prevNeighbor] &&
+                                        cleaned[nextNeighbor]
+                                    ) {
+                                        reinterpolated = interpolateBoxes(
+                                            prevNeighbor,
+                                            nextNeighbor,
+                                            cleaned[prevNeighbor],
+                                            cleaned[nextNeighbor]
+                                        );
+                                    }
+
+                                    return { ...cleaned, ...reinterpolated };
+                                });
+
+                                // Remove from manualFrames
+                                setManualFrames((prev) => {
+                                    const updated = new Set(prev);
+                                    updated.delete(frame);
+                                    return updated;
+                                });
+                            }}
+                        >
+                            Delete
+                        </Button>
+                    </div>
+                ))}
             </div>
             <div style={{ position: 'absolute', bottom: 10, right: 10, zIndex: 10, backgroundColor: '#fff8', padding: '8px' }}>
                 <FormControl size="small" sx={{ minWidth: 120 }}>

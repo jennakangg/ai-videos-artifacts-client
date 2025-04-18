@@ -15,6 +15,7 @@ export const STUDY_STATE = Object.freeze({
 
 export const ANNOTATION_STATE = Object.freeze({
     WATCH_VIDEO_1: 'watch_video_1',
+    VIDEO_SPACER: 'video_spacer',
     WATCH_VIDEO_2: 'watch_video_2',
     INPUT_LABELS: 'input_labels',
     ANNOTATION: 'annotation',

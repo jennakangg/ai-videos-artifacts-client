@@ -66,7 +66,7 @@ const AnnotationManager = (props) => {
             const video = document.getElementById('video');
             try {
                 video.onended = function() {
-                    setAnnotationState(ANNOTATION_STATE.WATCH_VIDEO_2)
+                    setAnnotationState(ANNOTATION_STATE.VIDEO_SPACER)
                 }
                 video.load();
             }catch (e) {
@@ -130,6 +130,10 @@ const AnnotationManager = (props) => {
             currentBlock.current = currentBlock.current + 1
             setAnnotationState(ANNOTATION_STATE.LOAD_NEXT_BLOCK)
         }
+    }
+
+    const onClickPlayVideoSecond = () => {
+        setAnnotationState(ANNOTATION_STATE.WATCH_VIDEO_2)
     }
 
     const checkLoadingNextBlock = () => {
@@ -218,7 +222,11 @@ const AnnotationManager = (props) => {
                                         setDidNetworkFail={setDidNetworkFail}
                         >
                         </VideoAnnotator>
-                    ) : annotationState === ANNOTATION_STATE.WAITING_PAGE_FOR_NEXT ? (
+                    ) : annotationState === ANNOTATION_STATE.VIDEO_SPACER ? (
+                        <Button onClick={onClickPlayVideoSecond}>
+                            CLICK TO WATCH VIDEO FOR SECOND TIME
+                        </Button>
+                    ): annotationState === ANNOTATION_STATE.WAITING_PAGE_FOR_NEXT ? (
                         <Button onClick={onClickNextVideo}>
                             CLICK FOR NEXT VIDEO
                         </Button>

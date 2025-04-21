@@ -18,6 +18,7 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
 
 import {uploadTrial} from "../fetch/fetch";
+import {useNavigate} from "react-router-dom";
 
 const VideoAnnotator = (props) => {
     // labels
@@ -42,6 +43,14 @@ const VideoAnnotator = (props) => {
     const [isPlaying, setIsPlaying] = useState(true);
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
+
+    const navigate = useNavigate();
+
+    useEffect(() => {
+        if (!props.userID) {
+            navigate('/login'); // or whatever fallback route you want
+        }
+    }, [props.userID, navigate]);
 
     const generateColors = (labels) => {
         const baseColors = ['red', 'green', 'blue', 'orange', 'purple', 'cyan', 'magenta', 'lime', 'yellow', 'pink', 'brown', 'gray'];

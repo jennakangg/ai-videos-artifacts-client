@@ -4,22 +4,27 @@ import {Navigate, useLocation, useNavigate} from "react-router-dom";
 import {uploadEvent} from "../fetch/fetch";
 import {ANNOTATION_STATE, STUDY_STATE} from "../utils/Constants"
 import AnnotationManager from "./AnnotationManager";
+
 const ExperimentManager = (props) => {
-    const { state } = useLocation();
+    const location = useLocation();
+    const state = location?.state || null;
+
     const [experimentState, setExperimentState] = useState(STUDY_STATE.STUDY)
     const [didNetworkFail, setDidNetworkFail] = useState(false)
 
     useEffect(() => {
-        let timestamp = new Date().toLocaleString()
-        let request = {
-            userTrialEventID: state.userID + "_" + timestamp,
-            videoID: "",
-            userID: state.userID,
-            blockNum: "",
-            timestamp: timestamp,
-            eventType: "reachedExperiment"
+        if (state && state.userID){
+            let timestamp = new Date().toLocaleString()
+            let request = {
+                userTrialEventID: state.userID + "_" + timestamp,
+                videoID: "",
+                userID: state.userID,
+                blockNum: "",
+                timestamp: timestamp,
+                eventType: "reachedExperiment"
+            }
+            uploadEvent(request, setDidNetworkFail)
         }
-        uploadEvent(request, setDidNetworkFail)
     }, []);
 
     if (didNetworkFail) {
@@ -27,6 +32,8 @@ const ExperimentManager = (props) => {
             message: "Network Failed",
             type: "networkFailure"
         }} replace={true} />
+    } else if (!state || !state.userID) {
+        return <Navigate to={"/login"}/>
     } else {
         return (
             <Container maxWidth={false} disableGutters sx={{

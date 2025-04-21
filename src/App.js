@@ -24,6 +24,8 @@ function App() {
                 <Route path ="/experimentmanager"  element={<ExperimentManager />} />
                 <Route path ="/annotationmanager"  element={<AnnotationManager />} />
                 <Route path="/complete" element={<Complete />} />
+
+                <Route path="*" element={<Navigate to="/login" />} />
               </Route>
             </Routes>
           </div>

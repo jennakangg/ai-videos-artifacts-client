@@ -6,8 +6,11 @@ import {ANNOTATION_STATE} from "../utils/Constants";
 import VideoContainer from "../components/VideoContainer";
 import InputLabels from "../components/InputLabels";
 import VideoAnnotator from "./VideoAnnotator";
+import { useNavigate } from 'react-router-dom';
 
 const AnnotationManager = (props) => {
+    const navigate = useNavigate();
+
     const [didNetworkFail, setDidNetworkFail] = useState(false)
     const [annotationState, setAnnotationState] = useState(props.annotationState)
 
@@ -27,6 +30,12 @@ const AnnotationManager = (props) => {
     const cachedNextVideosBytes = useRef([])
 
     const loadingRetries = useRef(0);
+
+    useEffect(() => {
+        if (!props.userID) {
+            navigate('/login'); // or whatever fallback route you want
+        }
+    }, [props.userID, navigate]);
 
     const setLoading = (value) => {
         loading.current=value

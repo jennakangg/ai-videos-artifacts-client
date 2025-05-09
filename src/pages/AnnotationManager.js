@@ -24,6 +24,7 @@ const AnnotationManager = (props) => {
     // load first block on first load
     const currentBlock = useRef(0)
     const labels = useRef([])
+    const videoRating = useRef([])
     const loading = useRef(true)
     const [canStartNextBlock, setCanStartNextBlock] = useState(false)
     const currentVideos = useRef([])
@@ -52,6 +53,11 @@ const AnnotationManager = (props) => {
     const setLabels = (value) => {
         labels.current = value
     }
+
+    const setVideoRating = (value) => {
+        videoRating.current = value
+    }
+
 
     const setCurrentVideoData = (value) => {
         currVideoData.current = value
@@ -220,7 +226,9 @@ const AnnotationManager = (props) => {
                         videoSrc={`data:video/mpeg;base64,${currVideoData.current.videoData}`}>
                         </VideoContainer>
                     ) : annotationState === ANNOTATION_STATE.INPUT_LABELS ? (
-                        <InputLabels setLabels={setLabels} setAnnotationState={setAnnotationState}>
+                        <InputLabels setLabels={setLabels}
+                                     setVideoRating={setVideoRating}
+                                     setAnnotationState={setAnnotationState}>
                         </InputLabels>
                     ) : annotationState === ANNOTATION_STATE.ANNOTATION ? (
                         <VideoAnnotator videoSrc={`data:video/mpeg;base64,${currVideoData.current.videoData}`}
@@ -229,6 +237,7 @@ const AnnotationManager = (props) => {
                                         userID={userID}
                                         videoID={currVideoData.current.videoID}
                                         setDidNetworkFail={setDidNetworkFail}
+                                        videoRating={videoRating}
                         >
                         </VideoAnnotator>
                     ) : annotationState === ANNOTATION_STATE.VIDEO_SPACER ? (

@@ -45,6 +45,30 @@ const VideoAnnotator = (props) => {
     const [duration, setDuration] = useState(0);
 
     const navigate = useNavigate();
+    let videoRating = props.videoRating;
+    const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+
+    useEffect(() => {
+        const handleLoadedMetadata = () => {
+            if (videoRef.current) {
+                setDimensions({
+                    width: videoRef.current.videoWidth,
+                    height: videoRef.current.videoHeight,
+                });
+            }
+        };
+
+        const videoEl = videoRef.current;
+        if (videoEl) {
+            videoEl.addEventListener("loadedmetadata", handleLoadedMetadata);
+        }
+
+        return () => {
+            if (videoEl) {
+                videoEl.removeEventListener("loadedmetadata", handleLoadedMetadata);
+            }
+        };
+    }, []);
 
     useEffect(() => {
         if (!props.userID) {
@@ -332,6 +356,9 @@ const VideoAnnotator = (props) => {
             timestamp: timestamp,
             annotation: JSON.stringify(exportData),
             labels: JSON.stringify(labels),
+            videoRating: JSON.stringify(videoRating),
+            videoHeight: JSON.stringify(dimensions.height),
+            videoWidth: JSON.stringify(dimensions.width)
         };
 
         uploadTrial(request, props.setDidNetworkFail)
@@ -397,8 +424,10 @@ const VideoAnnotator = (props) => {
                 const video = videoRef.current;
                 if (video.paused) {
                     video.play();
+                    setIsPlaying(true);
                 } else {
                     video.pause();
+                    setIsPlaying(false);
                 }
             }
         };

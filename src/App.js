@@ -4,6 +4,8 @@ import { ThemeProvider, createTheme } from '@mui/material/styles';
 import ExperimentManager from "./pages/ExperimentManager";
 import AnnotationManager from "./pages/AnnotationManager";
 import Complete from "./pages/Complete";
+import IntroConsent from "./pages/IntroConsent";
+import Directions from "./pages/Directions";
 
 
 const THEME = createTheme({
@@ -24,7 +26,8 @@ function App() {
                 <Route path ="/experimentmanager"  element={<ExperimentManager />} />
                 <Route path ="/annotationmanager"  element={<AnnotationManager />} />
                 <Route path="/complete" element={<Complete />} />
-
+                <Route path="/introconsent" element={<IntroConsent />} />
+                <Route path="/directions" element={<Directions />} />
                 <Route path="*" element={<Navigate to="/login" />} />
               </Route>
             </Routes>

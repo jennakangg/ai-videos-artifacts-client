@@ -18,7 +18,7 @@ const Login = () => {
             .then((data) => {
                 if (data.status !== 500) {
                     navigate(
-                        '../experimentmanager',
+                        '../introconsent',
                         {
                             state: {
                                 userID: userIDInput,

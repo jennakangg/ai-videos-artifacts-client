@@ -29,6 +29,8 @@ const AnnotationManager = (props) => {
     const [canStartNextBlock, setCanStartNextBlock] = useState(false)
     const currentVideos = useRef([])
     const cachedNextVideosBytes = useRef([])
+    const [videoCounterProgress, setVideoCounterProgress] = useState(0)
+    const [totalVideos, setTotalVideos] = useState(0)
 
     const loadingRetries = useRef(0);
 
@@ -74,10 +76,16 @@ const AnnotationManager = (props) => {
             eventType: "reachedAnnotation"
         }
         uploadEvent(request, setDidNetworkFail)
+
+        const totalCount = videoIDs.reduce((acc, sublist) => acc + sublist.length, 0);
+
+        setTotalVideos(totalCount)
     }, []);
 
     useEffect(() => {
         if (annotationState === ANNOTATION_STATE.WATCH_VIDEO_1){
+            setVideoCounterProgress(prev => prev + 1);
+
             const video = document.getElementById('video');
             try {
                 video.onended = function() {
@@ -100,9 +108,6 @@ const AnnotationManager = (props) => {
             }
         }
         else if (annotationState === ANNOTATION_STATE.LOAD_NEXT_BLOCK){
-            // increment to start next block
-            console.log(videoIDs.length)
-            console.log(currentBlock.current)
             if (currentBlock.current >= videoIDs.length) {
                 console.log("COMPLETE")
                 setDidComplete(true)
@@ -210,6 +215,21 @@ const AnnotationManager = (props) => {
                 flexDirection: 'column',
                 display: 'flex', backgroundColor: '#FFFFFF'
             }}>
+                <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    zIndex: 10,
+                    backgroundColor: '#fff8',
+                    display: 'flex',
+                    flexDirection: 'column',
+                }}>
+                    <Typography variant="body1" sx={{
+                        p:5,
+                    }}>
+                        Progress: {videoCounterProgress} / {totalVideos}
+                    </Typography>
+                </div>
                 <Box   display="flex"
                        justifyContent="center"
                        alignItems="center"

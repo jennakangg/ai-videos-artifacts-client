@@ -502,7 +502,8 @@ const VideoAnnotator = (props) => {
                             position: 'absolute',
                             top: 0,
                             left: 0,
-                            pointerEvents: 'auto'
+                            pointerEvents: 'auto',
+                            // backgroundColor: "#000000"
                         }}
                     />
                 </div>

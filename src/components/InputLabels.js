@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import {Box, TextField, Button, Chip, Stack, Alert, Slider, Typography} from '@mui/material';
+import {Box, TextField, Button, Chip, Stack, Alert, Slider, Typography, Modal} from '@mui/material';
 import { ANNOTATION_STATE } from "../utils/Constants";
 
 export default function InputLabels(props) {
     const [input, setInput] = useState('');
     const [labels, setLabels] = useState([]);
     const [videoRating, setVideoRating] = useState(5);
+    const [showRatingModal, setShowRatingModal] = useState(false);
 
     const [error, setError] = useState(false);
     const maxLabels = 5;
@@ -80,39 +81,76 @@ export default function InputLabels(props) {
                     />
                 ))}
             </Stack>
-            <Box
-                display="flex"
-                justifyContent="center"
-                alignItems="center"
-                sx={{ width: '50%', p: 6, flexDirection: 'column' }}
-            >
-                <Slider
-                    defaultValue={5}
-                    valueLabelDisplay="on"
-                    step={1}
-                    marks
-                    min={1}
-                    max={7}
-                    aria-label="Always visible"
-                    onChange={(e) =>{
-                        setVideoRating(e.target.value)
-                    }}
-                />
-                <Typography variant="body1" sx={{
-                    p:2,
-                    color: "#000000"
-                }}>
-                    Please rate the video quality on a scale of 1 to 10
-                </Typography>
-            </Box>
 
             <Button
-                onClick={submitLabels}
-                disabled={labels.length === 0}
+                onClick={()=>{setShowRatingModal(true)}}
+                // disabled={labels.length === 0}
                 sx={{ mt: 2 }}
             >
-                Submit
+                {labels.length === 0 ? "No visible artifacts" : "Done"}
             </Button>
+            <Modal
+                open={showRatingModal}
+                onClose={() => {
+                    setShowRatingModal(false)
+                }}
+                sx={{
+                    p: 3,
+                    display:'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                }}
+            >
+                <Box   display="flex"
+                       justifyContent="center"
+                       alignItems="center"
+                       sx={{
+                           flexDirection: 'column',
+                           display: 'flex',
+                           boxShadow: 24,
+                           maxHeight: '90vh',
+                           borderRadius: '16px',
+                           borderColor: 'primary.main',
+                           backgroundColor: '#FFFFFF',
+                           alignItems: 'center',
+                           width: '70%',
+                       }}>
+                    <Box
+                        display="flex"
+                        justifyContent="center"
+                        alignItems="center"
+                        sx={{ width: '80%', p: 6, flexDirection: 'column' }}
+                    >
+                        <Slider
+                            defaultValue={5}
+                            valueLabelDisplay="on"
+                            step={1}
+                            marks
+                            min={1}
+                            max={7}
+                            aria-label="Always visible"
+                            onChange={(e) =>{
+                                setVideoRating(e.target.value)
+                            }}
+                        />
+                        <Typography variant="body1" sx={{
+                            p:2,
+                            color: "#000000"
+                        }}>
+                            Please rate the video quality on a scale of 1 to 7
+                        </Typography>
+                    </Box>
+                    <Box sx={{flexDirection: 'row', display: 'flex', p: 3}}
+                    >
+                        <Button sx={{marginRight: "20px"}} onClick={()=>{setShowRatingModal(false)}} variant="contained" color="error" >
+                            Cancel
+                        </Button>
+                        <Button sx={{marginLeft: "20px"}} onClick={submitLabels} variant="contained" color="success" >
+                            Submit
+                        </Button>
+                    </Box>
+                </Box>
+            </Modal>
         </Box>
     );
 }

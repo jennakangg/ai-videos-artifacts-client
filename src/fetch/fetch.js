@@ -82,8 +82,8 @@ export function getVideosForBlock(request, setLoading, setVideoData, setDidNetwo
 }
 
 
-export function getCode(type, setLoading, setCodeValue) {
-    fetch(`${ENDPOINT}/users/getcode/${type}`,
+export function getCode(type, setLoading, setCodeValue, userID) {
+    fetch(`${ENDPOINT}/users/getcode/${type}/${userID}`,
         {
             method: "GET",
             headers: {

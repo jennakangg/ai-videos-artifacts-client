@@ -17,6 +17,7 @@ const AnnotationManager = (props) => {
     const [didComplete, setDidComplete] = useState(false)
 
     let userID = props.userID
+    console.log(userID)
     let videoIDs = props.videoIDs
 
     const currVideoData = useRef()
@@ -206,7 +207,8 @@ const AnnotationManager = (props) => {
     } else if (didComplete) {
         return <Navigate to={"/complete"} state={{
             message: "All trials have been completed",
-            type: "successful"
+            type: "successful",
+            userID: userID
         }} replace={true} />
     }
     else {
@@ -225,7 +227,7 @@ const AnnotationManager = (props) => {
                     flexDirection: 'column',
                 }}>
                     <Typography variant="body1" sx={{
-                        p:5,
+                        p:3,
                     }}>
                         Progress: {videoCounterProgress} / {totalVideos}
                     </Typography>

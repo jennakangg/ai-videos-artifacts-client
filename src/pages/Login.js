@@ -16,14 +16,15 @@ const Login = () => {
             return response.json();
         })
             .then((data) => {
+                console.log(data)
                 if (data.status !== 500) {
                     navigate(
                         '../introconsent',
                         {
                             state: {
-                                userID: userIDInput,
-                                videoIDs : data,
-                                numBlocks: data.length
+                                userID: data.actualUserID,
+                                videoIDs : data.trials,
+                                numBlocks: data.trials.length
                             }
                         })
                 }

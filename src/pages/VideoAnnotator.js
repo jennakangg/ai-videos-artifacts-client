@@ -16,7 +16,6 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
-
 import {uploadTrial} from "../fetch/fetch";
 import {useNavigate} from "react-router-dom";
 
@@ -163,8 +162,9 @@ const VideoAnnotator = (props) => {
     };
 
     const handleMouseDown = (e) => {
+
         const video = videoRef.current;
-        video.pause(); // ⏸️ Pause the video right when the user clicks
+        video.pause();
 
         const { x, y } = getRelativeCoords(e);
         const frame = getCurrentFrame();
@@ -172,7 +172,11 @@ const VideoAnnotator = (props) => {
 
         for (let index = boxes.length - 1; index >= 0; index--) {
             const box = boxes[index];
-            if (x >= box.x && x <= box.x + box.w && y >= box.y && y <= box.y + box.h) {
+            if (
+                box.label === currentLabel &&
+                x >= box.x && x <= box.x + box.w &&
+                y >= box.y && y <= box.y + box.h
+            ) {
                 boxes[index].interpolated = false;
                 manualFrames.add(frame);
                 setDraggingIndex(index);
@@ -184,6 +188,7 @@ const VideoAnnotator = (props) => {
         setStartPos({ x, y });
         setDrawing(true);
     };
+
 
 
     const handleMouseMove = (e) => {
@@ -419,8 +424,9 @@ const VideoAnnotator = (props) => {
 
     useEffect(() => {
         const handleKeyDown = (e) => {
-            if (e.code === 'Space') {
-                e.preventDefault(); // Prevent scrolling
+            const activeTag = document.activeElement.tagName.toLowerCase();
+            if (e.code === 'Space' && activeTag !== 'input' && activeTag !== 'textarea') {
+                e.preventDefault();
                 const video = videoRef.current;
                 if (video.paused) {
                     video.play();
@@ -492,7 +498,6 @@ const VideoAnnotator = (props) => {
                     >
                         <source id="annotationVideoSrc" type="video/mp4" src={props.videoSrc} />
                     </video>
-
                     <canvas
                         ref={canvasRef}
                         onMouseDown={handleMouseDown}
@@ -502,7 +507,8 @@ const VideoAnnotator = (props) => {
                             position: 'absolute',
                             top: 0,
                             left: 0,
-                            pointerEvents: 'auto',
+                            pointerEvents: labels.length === 0 ? 'none' : 'auto',
+                            cursor: labels.length === 0 ? 'not-allowed' : 'crosshair',
                             // backgroundColor: "#000000"
                         }}
                     />
@@ -599,40 +605,45 @@ const VideoAnnotator = (props) => {
                             <Button
                                 style={{ background: 'none', border: 'none', color: 'red', cursor: 'pointer' }}
                                 onClick={() => {
-                                    setHistory((prev) => [...prev, {
-                                        annotations: structuredClone(annotations),
-                                        manualFrames: new Set(manualFrames)
-                                    }]);
+                                    setHistory((prev) => [
+                                        ...prev,
+                                        {
+                                            annotations: structuredClone(annotations),
+                                            manualFrames: new Set(manualFrames),
+                                        },
+                                    ]);
 
                                     setAnnotations((prevAnnotations) => {
                                         const updated = { ...prevAnnotations };
-                                        delete updated[frame];
+
+                                        const remainingBoxes = updated[frame]?.filter((box) => box.label !== currentLabel);
+                                        if (remainingBoxes && remainingBoxes.length > 0) {
+                                            updated[frame] = remainingBoxes;
+                                        } else {
+                                            delete updated[frame];
+                                        }
 
                                         const updatedManualFrames = new Set(manualFrames);
-                                        updatedManualFrames.delete(frame);
+                                        if (!remainingBoxes || remainingBoxes.length === 0) {
+                                            updatedManualFrames.delete(frame);
+                                        }
 
                                         const sorted = [...updatedManualFrames].sort((a, b) => a - b);
-
-                                        // Find neighbors of the deleted frame
-                                        const frameIndex = sorted.findIndex(f => f > frame);
+                                        const frameIndex = sorted.findIndex((f) => f > frame);
                                         const prevNeighbor = sorted[frameIndex - 1];
                                         const nextNeighbor = sorted[frameIndex];
 
-                                        // Start fresh: keep only manual frames
                                         const cleaned = {};
                                         for (const f of updatedManualFrames) {
                                             cleaned[f] = updated[f];
                                         }
 
-                                        // Remove old interpolated frames between prev and next
                                         for (let f = prevNeighbor + 1; f < nextNeighbor; f++) {
-                                            if (updated[f]?.every(box => box.interpolated)) {
-                                                // fully interpolated frame — delete it
+                                            if (updated[f]?.every((box) => box.interpolated)) {
                                                 delete cleaned[f];
                                             }
                                         }
 
-                                        // Reinterpolate between remaining neighbors
                                         let reinterpolated = {};
                                         if (
                                             prevNeighbor !== undefined &&
@@ -648,16 +659,13 @@ const VideoAnnotator = (props) => {
                                             );
                                         }
 
+                                        // Also update manualFrames safely
+                                        setManualFrames(updatedManualFrames);
+
                                         return { ...cleaned, ...reinterpolated };
                                     });
-
-                                    // Remove from manualFrames
-                                    setManualFrames((prev) => {
-                                        const updated = new Set(prev);
-                                        updated.delete(frame);
-                                        return updated;
-                                    });
                                 }}
+
                             >
                                 Delete
                             </Button>

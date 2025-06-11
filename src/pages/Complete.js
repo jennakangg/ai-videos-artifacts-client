@@ -15,7 +15,7 @@ const Complete = (props) => {
             setCodeValue(NETWORK_FAILED_CODE)
             setLoading(false)
         } else {
-            getCode(state.type, setLoading, setCodeValue)
+            getCode(state.type, setLoading, setCodeValue, state.userID)
         }
     }, []);
 

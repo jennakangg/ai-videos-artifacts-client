@@ -23,6 +23,8 @@ const VideoAnnotator = (props) => {
     // labels
     const [input, setInput] = useState('');
     const [labels, setLabels] = useState(props.labels)
+    const [labelError, setLabelError] = useState(false);
+
     const [showLabeledFrames, setShowLabeledFrames] = useState(true);
 
     const videoRef = useRef(null);
@@ -162,6 +164,12 @@ const VideoAnnotator = (props) => {
     };
 
     const handleMouseDown = (e) => {
+        if (!currentLabel) {
+            setLabelError(true);
+            return; // Prevent drawing
+        } else {
+            setLabelError(false); // Clear error once a label is selected
+        }
 
         const video = videoRef.current;
         video.pause();
@@ -333,19 +341,18 @@ const VideoAnnotator = (props) => {
         const video = videoRef.current;
         const fps = video.frameRate || 30;
         const exportData = Object.entries(annotations).flatMap(([frameStr, boxes]) => {
-        const frame = parseInt(frameStr, 10);
-        const time = frame / fps;
-
-        return boxes.map((box) => ({
-            time: parseFloat(time.toFixed(3)), // seconds
-            frame,
-            label: box.label,
-            x: box.x,
-            y: box.y,
-            w: box.w,
-            h: box.h,
-            interpolated: box.interpolated || false,
-        }));
+            const frame = parseInt(frameStr, 10);
+            const time = frame / fps;
+            return boxes.map((box) => ({
+                time: parseFloat(time.toFixed(3)), // seconds
+                frame,
+                label: box.label,
+                x: box.x,
+                y: box.y,
+                w: box.w,
+                h: box.h,
+                interpolated: box.interpolated || false,
+            }));
         });
 
         const timestamp = new Date().toISOString();
@@ -372,12 +379,18 @@ const VideoAnnotator = (props) => {
     // ***** LABEL STUFF ******
     const handleAddLabel = () => {
         const trimmed = input.trim();
-        if (trimmed && !labels.includes(trimmed) && labels.length <= MAX_LABELS) {
-            setLabels(prev => [...prev, trimmed]);
+        if (trimmed && !labels.includes(trimmed) && labels.length < MAX_LABELS) {
+            setLabels(prev => {
+                const newLabels = [...prev, trimmed];
+                // If no label is currently selected, or if user just added first label, auto-select it
+                if (!currentLabel || newLabels.length === 1) {
+                    setCurrentLabel(trimmed);
+                }
+                return newLabels;
+            });
         }
         setInput('');
     };
-
     const handleDelete = (labelToDelete) => {
         setLabels(prev => prev.filter(label => label !== labelToDelete));
     };

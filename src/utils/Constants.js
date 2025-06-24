@@ -1,5 +1,5 @@
-export const isDev = false
-export const NETWORK_FAILED_CODE = "C1E01N3N"
+export const isDev = true
+export const NETWORK_FAILED_CODE = "C1G7RJ4R"
 export const MAX_LABELS = 5
 
 export const STUDY_STATE = Object.freeze({

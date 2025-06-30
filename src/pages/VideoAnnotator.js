@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import {ANNOTATION_STATE, MAX_LABELS} from "../utils/Constants";
+import {ANNOTATION_STATE, MAX_LABELS, MIN_BOX_AREA} from "../utils/Constants";
 import {
     FormControl,
     InputLabel,
@@ -8,30 +8,40 @@ import {
     Button,
     Typography,
     Stack,
-    TextField,
-    Chip,
-    Box, Alert, IconButton
+    Box, Alert, IconButton, Collapse
 } from '@mui/material';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
 import {uploadTrial} from "../fetch/fetch";
 import {useNavigate} from "react-router-dom";
+import VideoRatingModal from "../components/VideoRatingModal";
+import LabelSelector from "../components/LabelSelector";
+
 
 const VideoAnnotator = (props) => {
     // labels
-    const [input, setInput] = useState('');
-    const [labels, setLabels] = useState(props.labels)
-    const [labelError, setLabelError] = useState(false);
+
+    const [selectedCategories, setSelectedCategories] = useState([]);
+    const [customLabel, setCustomLabel] = useState('');
+    const [labels, setLabels] = useState([]);
 
     const [showLabeledFrames, setShowLabeledFrames] = useState(true);
+    const [showLabelPanel, setShowLabelPanel] = useState(true);
+
+    const [boxTooSmallError, setBoxTooSmallError] = useState(false);
 
     const videoRef = useRef(null);
     const canvasRef = useRef(null);
     const [currentLabel, setCurrentLabel] = useState(labels[0]);
+
     const [annotations, setAnnotations] = useState({});
     const [manualFrames, setManualFrames] = useState(new Set());
+
     const [drawing, setDrawing] = useState(false);
     const [startPos, setStartPos] = useState({ x: 0, y: 0 });
     const [draggingIndex, setDraggingIndex] = useState(null);
@@ -46,8 +56,24 @@ const VideoAnnotator = (props) => {
     const [duration, setDuration] = useState(0);
 
     const navigate = useNavigate();
-    let videoRating = props.videoRating;
+
     const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+    const [videoRating, setVideoRating] = useState(5);
+    const [showRatingModal, setShowRatingModal] = useState(false);
+
+    const formatLabel = (labelObj) => {
+        const categoryStr = labelObj.categories.join(', ');
+        return labelObj.text ? `${categoryStr} - ${labelObj.text}` : categoryStr;
+    };
+
+    const setHistoryFunction = () => {
+        setHistory((prev) => [...prev, {
+            annotations: structuredClone(annotations),
+            manualFrames: new Set(manualFrames),
+            labels: structuredClone(labels),
+            currentLabel: currentLabel ? structuredClone(currentLabel) : undefined,
+        }]);
+    }
 
     useEffect(() => {
         const handleLoadedMetadata = () => {
@@ -77,12 +103,12 @@ const VideoAnnotator = (props) => {
         }
     }, [props.userID, navigate]);
 
-    const generateColors = (labels) => {
+    const generateColors = (labelObjs) => {
         const baseColors = ['red', 'green', 'blue', 'orange', 'purple', 'cyan', 'magenta', 'lime', 'yellow', 'pink', 'brown', 'gray'];
         const labelColors = {};
-        labels.forEach((label, index) => {
-            // Wrap around if there are more labels than base colors
-            labelColors[label] = baseColors[index % baseColors.length];
+        labelObjs.forEach((labelObj, index) => {
+            const labelStr = formatLabel(labelObj);
+            labelColors[labelStr] = baseColors[index % baseColors.length];
         });
         return labelColors;
     };
@@ -164,13 +190,6 @@ const VideoAnnotator = (props) => {
     };
 
     const handleMouseDown = (e) => {
-        if (!currentLabel) {
-            setLabelError(true);
-            return; // Prevent drawing
-        } else {
-            setLabelError(false); // Clear error once a label is selected
-        }
-
         const video = videoRef.current;
         video.pause();
 
@@ -181,7 +200,7 @@ const VideoAnnotator = (props) => {
         for (let index = boxes.length - 1; index >= 0; index--) {
             const box = boxes[index];
             if (
-                box.label === currentLabel &&
+                box.label === formatLabel(currentLabel) &&
                 x >= box.x && x <= box.x + box.w &&
                 y >= box.y && y <= box.y + box.h
             ) {
@@ -240,10 +259,8 @@ const VideoAnnotator = (props) => {
         const frame = getCurrentFrame();
 
         if (draggingIndex !== null) {
-            setHistory((prev) => [...prev, {
-                annotations: structuredClone(annotations),
-                manualFrames: new Set(manualFrames)
-            }]);
+            setHistoryFunction()
+
             setDraggingIndex(null);
             return;
         }
@@ -251,19 +268,28 @@ const VideoAnnotator = (props) => {
         if (!drawing) return;
 
         const { x: endX, y: endY } = getRelativeCoords(e);
+        const width = Math.abs(startPos.x - endX);
+        const height = Math.abs(startPos.y - endY);
+        const area = width * height;
+
+        if (area < MIN_BOX_AREA) {
+            setBoxTooSmallError(true);
+            setDrawing(false);
+            return;
+        }
+
         const newBox = {
             x: Math.min(startPos.x, endX),
             y: Math.min(startPos.y, endY),
             w: Math.abs(startPos.x - endX),
             h: Math.abs(startPos.y - endY),
-            label: currentLabel,
+            label: formatLabel(currentLabel),
             interpolated: false,
         };
 
-        setHistory((prev) => [...prev, {
-            annotations: structuredClone(annotations),
-            manualFrames: new Set(manualFrames)
-        }]);
+        setBoxTooSmallError(false);
+        setHistoryFunction()
+
         setAnnotations((prev) => {
             const updated = { ...prev };
             if (!updated[frame]) updated[frame] = [];
@@ -286,27 +312,30 @@ const VideoAnnotator = (props) => {
         setRedoStack((r) => [...r, {
             annotations: structuredClone(annotations),
             manualFrames: new Set(manualFrames),
+            labels: structuredClone(labels),
+            currentLabel: currentLabel ? structuredClone(currentLabel) : undefined,
         }]);
 
         setAnnotations(prev.annotations);
         setManualFrames(new Set(prev.manualFrames));
+        setLabels(prev.labels);
+        setCurrentLabel(prev.currentLabel);
         setHistory((h) => h.slice(0, -1));
     };
-
 
     const redo = () => {
         if (!redoStack.length) return;
         const next = redoStack[redoStack.length - 1];
 
-        setHistory((h) => [...h, {
-            annotations: structuredClone(annotations),
-            manualFrames: new Set(manualFrames),
-        }]);
+        setHistoryFunction()
 
         setAnnotations(next.annotations);
         setManualFrames(new Set(next.manualFrames));
+        setLabels(next.labels);
+        setCurrentLabel(next.currentLabel);
         setRedoStack((r) => r.slice(0, -1));
     };
+
 
     const exportAnnotations = () => {
         const video = videoRef.current;
@@ -372,38 +401,45 @@ const VideoAnnotator = (props) => {
             videoHeight: JSON.stringify(dimensions.height),
             videoWidth: JSON.stringify(dimensions.width)
         };
-
         uploadTrial(request, props.setDidNetworkFail)
     }
 
-    // ***** LABEL STUFF ******
-    const handleAddLabel = () => {
-        const trimmed = input.trim();
-        if (trimmed && !labels.includes(trimmed) && labels.length < MAX_LABELS) {
-            setLabels(prev => {
-                const newLabels = [...prev, trimmed];
-                // If no label is currently selected, or if user just added first label, auto-select it
-                if (!currentLabel || newLabels.length === 1) {
-                    setCurrentLabel(trimmed);
+    const handleDeleteLabel = (indexToDelete) => {
+        setLabels((prevLabels) => {
+            const deletedLabelObj = prevLabels[indexToDelete];
+            const deletedLabelStr = formatLabel(deletedLabelObj);
+
+            const updatedLabels = prevLabels.filter((_, i) => i !== indexToDelete);
+
+            if (JSON.stringify(currentLabel) === JSON.stringify(deletedLabelObj)) {
+                setCurrentLabel(updatedLabels[0] || undefined);
+            }
+
+            // Update annotations and manualFrames
+            setAnnotations((prevAnnotations) => {
+                const cleanedAnnotations = {};
+                const updatedManualFrames = new Set();
+
+                for (const [frame, boxes] of Object.entries(prevAnnotations)) {
+                    const filteredBoxes = boxes.filter(box => box.label !== deletedLabelStr);
+                    if (filteredBoxes.length > 0) {
+                        cleanedAnnotations[frame] = filteredBoxes;
+                        updatedManualFrames.add(Number(frame));
+                    }
                 }
-                return newLabels;
+
+                setManualFrames(updatedManualFrames);
+                return cleanedAnnotations;
             });
-        }
-        setInput('');
-    };
-    const handleDelete = (labelToDelete) => {
-        setLabels(prev => prev.filter(label => label !== labelToDelete));
+
+            return updatedLabels;
+        });
+
+        setHistoryFunction()
     };
 
-    const handleKeyDown = (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            handleAddLabel();
-        }
-    };
+
     // ***** LABEL STUFF ******
-
-
     const seekToFrame = (offset) => {
         const video = videoRef.current;
         const fps = video.frameRate || 30;
@@ -477,6 +513,7 @@ const VideoAnnotator = (props) => {
         };
     }, []);
 
+
     return (
         <div style={{
             width: '100vw',
@@ -521,7 +558,7 @@ const VideoAnnotator = (props) => {
                             top: 0,
                             left: 0,
                             pointerEvents: labels.length === 0 ? 'none' : 'auto',
-                            cursor: labels.length === 0 ? 'not-allowed' : 'crosshair',
+                            cursor: currentLabel === undefined ? 'not-allowed' : 'crosshair',
                             // backgroundColor: "#000000"
                         }}
                     />
@@ -618,18 +655,12 @@ const VideoAnnotator = (props) => {
                             <Button
                                 style={{ background: 'none', border: 'none', color: 'red', cursor: 'pointer' }}
                                 onClick={() => {
-                                    setHistory((prev) => [
-                                        ...prev,
-                                        {
-                                            annotations: structuredClone(annotations),
-                                            manualFrames: new Set(manualFrames),
-                                        },
-                                    ]);
+                                    setHistoryFunction()
 
                                     setAnnotations((prevAnnotations) => {
                                         const updated = { ...prevAnnotations };
 
-                                        const remainingBoxes = updated[frame]?.filter((box) => box.label !== currentLabel);
+                                        const remainingBoxes = updated[frame]?.filter((box) => box.label !== formatLabel(currentLabel));
                                         if (remainingBoxes && remainingBoxes.length > 0) {
                                             updated[frame] = remainingBoxes;
                                         } else {
@@ -690,51 +721,66 @@ const VideoAnnotator = (props) => {
             <div style={{
                 position: 'absolute',
                 bottom: 10, left: 10, zIndex: 10, backgroundColor: '#fff8', padding: '8px' }}>
-                <Box display="flex"
-                     justifyContent="center"
-                     alignItems="center" sx={{ width: '100%', p: 2 , flexDirection: 'column',}}>
-                    <Stack direction="row" spacing={2} alignItems="center">
-                        <TextField
-                            label="Enter label"
-                            variant="outlined"
-                            value={input}
-                            onChange={(e) => setInput(e.target.value)}
-                            onKeyDown={handleKeyDown}
-                        />
-                        <Button variant="contained" onClick={handleAddLabel} disabled={labels.length >= MAX_LABELS}>
-                            Add
-                        </Button>
-                    </Stack>
-                    <Stack direction="row" spacing={1} mt={2} flexWrap="wrap">
-                        {labels.map((label, index) => (
-                            <Chip
-                                key={index}
-                                label={label}
-                                onDelete={() => handleDelete(label)}
-                                sx={{ m: 0.5 }}
-                            />
-                        ))}
-                    </Stack>
-                    {error && (
-                        <Alert severity="error" sx={{ mt: 2 }}>
-                            Maximum of {MAX_LABELS} labels allowed.
-                        </Alert>
-                    )}
-                </Box>
+                <IconButton
+                    size="small"
+                    onClick={() => setShowLabelPanel(prev => !prev)}
+                    sx={{ alignSelf: 'flex-start', mb: 1 }}
+                >
+                    {showLabelPanel ? <ExpandMoreIcon /> : <ExpandLessIcon />}
+                    <Typography>
+                        {showLabelPanel ? "Hide Label Manager" : "Show Label Manager"}
+                    </Typography>
+                </IconButton>
+                <Collapse in={showLabelPanel} orientation="vertical">
+                    <Box display="flex"
+                         justifyContent="center"
+                         alignItems="center" sx={{ width: '100%', p: 2 , flexDirection: 'column',}}>
+                        {showLabelPanel && (
+                            <>
+                                <LabelSelector
+                                    selectedCategories={selectedCategories}
+                                    setCustomLabel={setCustomLabel}
+                                    customLabel={customLabel}
+                                    setLabels={setLabels}
+                                    labels={labels}
+                                    setSelectedCategories={setSelectedCategories}
+                                    handleDeleteLabel={handleDeleteLabel}
+                                    setError={setError}
+                                    setCurrentLabel={setCurrentLabel}
+                                    setHistoryFunction={setHistoryFunction}
+                                />
+                                {error && (
+                                    <Alert severity="error" sx={{ mt: 2 }}>
+                                        Maximum of {MAX_LABELS} labels allowed.
+                                    </Alert>
+                                )}
+                                {boxTooSmallError && (
+                                    <Alert severity="warning" sx={{ mt: 1 }}>
+                                        Bounding box too small (min {MIN_BOX_AREA} px²). Please draw a larger box.
+                                    </Alert>
+                                )}
+                            </>
+                        )}
+                    </Box>
+                </Collapse>
             </div>
             <div style={{ position: 'absolute', bottom: 10, right: 10, zIndex: 10, backgroundColor: '#fff8', padding: '8px' }}>
-                <FormControl size="small" sx={{ minWidth: 120 }}>
+                <FormControl size="small" sx={{ minWidth: 200 }}>
                     <InputLabel id="label-select">Label</InputLabel>
                     <Select
                         labelId="label-select"
                         id="label-select-dropdown"
-                        value={currentLabel}
+                        value={currentLabel ? JSON.stringify(currentLabel) : ''}
                         label="Label"
-                        onChange={(e) => setCurrentLabel(e.target.value)}
+                        onChange={(e) => {
+                            const selected = JSON.parse(e.target.value);
+                            setCurrentLabel(selected);
+                        }}
+                        variant="filled"
                     >
-                        {labels.map((label) => (
-                            <MenuItem key={label} value={label}>
-                                {label}
+                        {labels.map((labelObj, index) => (
+                            <MenuItem key={index} value={JSON.stringify(labelObj)}>
+                                {formatLabel(labelObj)}
                             </MenuItem>
                         ))}
                     </Select>
@@ -745,11 +791,17 @@ const VideoAnnotator = (props) => {
                 <Button onClick={() => seekToFrame(-1)} style={{ marginLeft: 10 }}>Prev Frame</Button>
                 <Button onClick={() => seekToFrame(1)} style={{ marginLeft: 5 }}>Next Frame</Button>
                 <Button onClick={() => {
-                    submitAnnotationsToDB()
-                    props.setAnnotationState(ANNOTATION_STATE.WAITING_PAGE_FOR_NEXT)
-                }}
-                        style={{ marginLeft: 5 }}>Submit</Button>
+                    setShowRatingModal(true)
+                }} style={{ marginLeft: 5 }}>Submit</Button>
             </div>
+            <VideoRatingModal showRatingModal={showRatingModal}
+                              setVideoRating={setVideoRating}
+                              setShowRatingModal={setShowRatingModal}
+                              onClickFunction={()=> {
+                                  submitAnnotationsToDB()
+                                  props.setAnnotationState(ANNOTATION_STATE.WAITING_PAGE_FOR_NEXT)
+                              }}
+            />
         </div>
     );
 };

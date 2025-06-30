@@ -68,6 +68,7 @@ export function getVideosForBlock(request, setLoading, setVideoData, setDidNetwo
                 if (!data || data.length === 0) {
                     console.log("There is nothing for this query");
                 }
+                console.log("CALLED FETCH VIDEOS")
                 setVideoData(data);
                 setLoading(false);
                 // console.log(data)

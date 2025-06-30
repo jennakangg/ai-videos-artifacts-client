@@ -1,4 +1,4 @@
-import {Box, Button, CircularProgress, Container, Typography} from "@mui/material";
+import {Box, Button, CircularProgress, Container, Modal, Slider, Typography} from "@mui/material";
 import React, {useEffect, useRef, useState} from "react";
 import {Navigate} from "react-router-dom";
 import {getVideosForBlock, uploadEvent} from "../fetch/fetch";
@@ -7,6 +7,7 @@ import VideoContainer from "../components/VideoContainer";
 import InputLabels from "../components/InputLabels";
 import VideoAnnotator from "./VideoAnnotator";
 import { useNavigate } from 'react-router-dom';
+import VideoRatingModal from "../components/VideoRatingModal";
 
 const AnnotationManager = (props) => {
     const navigate = useNavigate();
@@ -17,7 +18,6 @@ const AnnotationManager = (props) => {
     const [didComplete, setDidComplete] = useState(false)
 
     let userID = props.userID
-    console.log(userID)
     let videoIDs = props.videoIDs
 
     const currVideoData = useRef()
@@ -25,13 +25,13 @@ const AnnotationManager = (props) => {
     // load first block on first load
     const currentBlock = useRef(0)
     const labels = useRef([])
-    const videoRating = useRef([])
     const loading = useRef(true)
     const [canStartNextBlock, setCanStartNextBlock] = useState(false)
     const currentVideos = useRef([])
     const cachedNextVideosBytes = useRef([])
     const [videoCounterProgress, setVideoCounterProgress] = useState(0)
     const [totalVideos, setTotalVideos] = useState(0)
+    const [showRatingModal, setShowRatingModal] = useState(false);
 
     const loadingRetries = useRef(0);
 
@@ -52,15 +52,6 @@ const AnnotationManager = (props) => {
     const setCurrentVideos = (value) => {
         currentVideos.current = value
     }
-
-    const setLabels = (value) => {
-        labels.current = value
-    }
-
-    const setVideoRating = (value) => {
-        videoRating.current = value
-    }
-
 
     const setCurrentVideoData = (value) => {
         currVideoData.current = value
@@ -84,24 +75,24 @@ const AnnotationManager = (props) => {
     }, []);
 
     useEffect(() => {
-        if (annotationState === ANNOTATION_STATE.WATCH_VIDEO_1){
-            setVideoCounterProgress(prev => prev + 1);
-
+        // if (annotationState === ANNOTATION_STATE.WATCH_VIDEO_1){
+        //     // setVideoCounterProgress(prev => prev + 1); // MOVED TO video spacer
+        //
+        //     const video = document.getElementById('video');
+        //     try {
+        //         video.onended = function() {
+        //             setAnnotationState(ANNOTATION_STATE.VIDEO_SPACER)
+        //         }
+        //         video.load();
+        //     }catch (e) {
+        //         console.log(e)
+        //     }
+        // }
+        if (annotationState === ANNOTATION_STATE.WATCH_VIDEO_2) {
             const video = document.getElementById('video');
             try {
                 video.onended = function() {
-                    setAnnotationState(ANNOTATION_STATE.VIDEO_SPACER)
-                }
-                video.load();
-            }catch (e) {
-                console.log(e)
-            }
-        }
-        else if (annotationState === ANNOTATION_STATE.WATCH_VIDEO_2) {
-            const video = document.getElementById('video');
-            try {
-                video.onended = function() {
-                    setAnnotationState(ANNOTATION_STATE.INPUT_LABELS)
+                    setAnnotationState(ANNOTATION_STATE.ANNOTATION)
                 }
                 video.load();
             }catch (e) {
@@ -140,12 +131,13 @@ const AnnotationManager = (props) => {
 
     const onClickNextVideo = () => {
         // increment in the block
-        console.log(videoIDs[currentBlock.current].length)
+        setVideoCounterProgress(prev => prev + 1);
         if (currentIndexInBlock.current + 1 < videoIDs[currentBlock.current].length){
             currentIndexInBlock.current = currentIndexInBlock.current + 1
             // go to next video
             setCurrentVideoData(currentVideos.current[currentIndexInBlock.current])
-            setAnnotationState(ANNOTATION_STATE.WATCH_VIDEO_1)
+            // setAnnotationState(ANNOTATION_STATE.WATCH_VIDEO_1)
+            setAnnotationState(ANNOTATION_STATE.WATCH_VIDEO_2)
         } else { // else set up loading
             currentIndexInBlock.current = 0
             currentBlock.current = currentBlock.current + 1
@@ -166,7 +158,8 @@ const AnnotationManager = (props) => {
                 currentVideos.current = structuredClone(cachedNextVideosBytes.current)
             }
             setCurrentVideoData(currentVideos.current[currentIndexInBlock.current])
-            setAnnotationState(ANNOTATION_STATE.WATCH_VIDEO_1)
+            // setAnnotationState(ANNOTATION_STATE.WATCH_VIDEO_1)
+            setAnnotationState(ANNOTATION_STATE.WATCH_VIDEO_2)
             setCanStartNextBlock(true)
             if (currentBlock.current + 1 < videoIDs.length) {
                 // LOAD NEXT BLOCK after the next
@@ -247,28 +240,21 @@ const AnnotationManager = (props) => {
                         <VideoContainer setAnnotationState={setAnnotationState}
                         videoSrc={`data:video/mpeg;base64,${currVideoData.current.videoData}`}>
                         </VideoContainer>
-                    ) : annotationState === ANNOTATION_STATE.INPUT_LABELS ? (
-                        <InputLabels setLabels={setLabels}
-                                     setVideoRating={setVideoRating}
-                                     setAnnotationState={setAnnotationState}>
-                        </InputLabels>
                     ) : annotationState === ANNOTATION_STATE.ANNOTATION ? (
                         <VideoAnnotator videoSrc={`data:video/mpeg;base64,${currVideoData.current.videoData}`}
                                         labels={labels.current}
                                         setAnnotationState={setAnnotationState}
                                         userID={userID}
                                         videoID={currVideoData.current.videoID}
-                                        setDidNetworkFail={setDidNetworkFail}
-                                        videoRating={videoRating}
-                        >
+                                        setDidNetworkFail={setDidNetworkFail}>
                         </VideoAnnotator>
                     ) : annotationState === ANNOTATION_STATE.VIDEO_SPACER ? (
                         <Button onClick={onClickPlayVideoSecond}>
-                            CLICK TO WATCH VIDEO FOR SECOND TIME
+                            CLICK TO WATCH VIDEO
                         </Button>
                     ): annotationState === ANNOTATION_STATE.WAITING_PAGE_FOR_NEXT ? (
                         <Button onClick={onClickNextVideo}>
-                            CLICK FOR NEXT VIDEO
+                            CLICK TO WATCH NEXT VIDEO
                         </Button>
                     ) : (
                          <CircularProgress
@@ -277,6 +263,11 @@ const AnnotationManager = (props) => {
                         />
                     )}
                 </Box>
+                <VideoRatingModal showRatingModal={showRatingModal} setShowRatingModal={setShowRatingModal}
+                                  onClickFunction={()=>{
+                                      setAnnotationState(ANNOTATION_STATE.WAITING_PAGE_FOR_NEXT)
+                                  }}
+                />
             </Container>
         );
     }

@@ -1,6 +1,7 @@
-export const isDev = true
+export const isDev = false
 export const NETWORK_FAILED_CODE = "C1G7RJ4R"
 export const MAX_LABELS = 5
+export const MIN_BOX_AREA = 50; // in pixels
 
 export const STUDY_STATE = Object.freeze({
     LOGIN: 'login',
@@ -18,4 +19,14 @@ export const ANNOTATION_STATE = Object.freeze({
     ANNOTATION: 'annotation',
     WAITING_PAGE_FOR_NEXT: 'waiting_page_for_next',
     LOAD_NEXT_BLOCK: 'load_next_block'
+});
+
+
+export const LABEL_TYPES = Object.freeze({
+    SHAPE_FORM_GEOMETRY: 'Shape, Form, Geometry',
+    MOTION: 'Motion',
+    PHYSICS: 'Physics',
+    VISUAL_ARTIFACTS: 'Visual Artifacts',
+    SEMANTIC_MISMATCH: 'Semantic Mismatch with Text',
+    OTHER: 'Other'
 });

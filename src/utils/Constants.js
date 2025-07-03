@@ -1,4 +1,4 @@
-export const isDev = false
+export const isDev = true
 export const NETWORK_FAILED_CODE = "C1G7RJ4R"
 export const MAX_LABELS = 5
 export const MIN_BOX_AREA = 50; // in pixels

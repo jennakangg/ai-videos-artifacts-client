@@ -15,7 +15,12 @@ export default function LabelSelector (props) {
     };
 
     const handleAddLabel = () => {
-        if (props.selectedCategories.length === 0 && props.customLabel.trim() === '') return;
+        if (props.selectedCategories.length === 0 || props.customLabel.trim() === '') {
+            props.setTextError(true)
+            return;
+        }
+
+        console.log(props.customLabel)
 
         // Prevent adding more than MAX_LABELS
         if (props.labels.length >= MAX_LABELS) {
@@ -42,6 +47,7 @@ export default function LabelSelector (props) {
         props.setSelectedCategories([]);
         props.setCustomLabel('');
         props.setHistoryFunction()
+        props.setTextError(false)
     };
 
     return (
@@ -62,7 +68,7 @@ export default function LabelSelector (props) {
                 ))}
             </FormGroup>
             <TextField
-                label="Custom Label"
+                label="Detailed Description"
                 value={props.customLabel}
                 onChange={(e) => props.setCustomLabel(e.target.value)}
                 size="small"

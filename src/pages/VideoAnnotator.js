@@ -40,8 +40,14 @@ const VideoAnnotator = (props) => {
     const [currentLabel, setCurrentLabel] = useState(labels[0]);
 
     const [annotations, setAnnotations] = useState({});
-    const [manualFrames, setManualFrames] = useState(new Set());
-
+    const [manualFrames, setManualFrames] = useState(new Map());
+    // console.log(manualFrames)
+    // for (const [frame, boxes] of Object.entries(annotations)) {
+    //     const manualBoxes = boxes.filter(box => !box.interpolated);
+    //     if (manualBoxes.length > 0) {
+    //         console.log(`Frame ${frame}:`, manualBoxes);
+    //     }
+    // }
     const [drawing, setDrawing] = useState(false);
     const [startPos, setStartPos] = useState({ x: 0, y: 0 });
     const [draggingIndex, setDraggingIndex] = useState(null);
@@ -50,6 +56,7 @@ const VideoAnnotator = (props) => {
     const [redoStack, setRedoStack] = useState([]);
     const [currentFrame, setCurrentFrame] = useState(0);
     const [error, setError] = useState(false);
+    const [textError, setTextError] = useState(false);
 
     const [isPlaying, setIsPlaying] = useState(true);
     const [currentTime, setCurrentTime] = useState(0);
@@ -58,7 +65,9 @@ const VideoAnnotator = (props) => {
     const navigate = useNavigate();
 
     const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
-    const [videoRating, setVideoRating] = useState(5);
+    const [videoRating, setVideoRating] = useState(4);
+    const [promptRating, setPromptRating] = useState(4);
+
     const [showRatingModal, setShowRatingModal] = useState(false);
 
     const formatLabel = (labelObj) => {
@@ -67,13 +76,16 @@ const VideoAnnotator = (props) => {
     };
 
     const setHistoryFunction = () => {
-        setHistory((prev) => [...prev, {
-            annotations: structuredClone(annotations),
-            manualFrames: new Set(manualFrames),
-            labels: structuredClone(labels),
-            currentLabel: currentLabel ? structuredClone(currentLabel) : undefined,
-        }]);
-    }
+        setHistory((prev) => [
+            ...prev,
+            {
+                annotations: structuredClone(annotations),
+                manualFrames: new Map(manualFrames),  // ✅ preserve both frame and label
+                labels: structuredClone(labels),
+                currentLabel: currentLabel ? structuredClone(currentLabel) : undefined,
+            },
+        ]);
+    };
 
     useEffect(() => {
         const handleLoadedMetadata = () => {
@@ -117,7 +129,11 @@ const VideoAnnotator = (props) => {
 
     const getCurrentFrame = () => {
         const video = videoRef.current;
-        return Math.floor(video.currentTime * (video.frameRate || 30));
+        if (video){
+            return Math.floor(video.currentTime * (video.frameRate || 30));
+        } else {
+            return 0
+        }
     };
 
     const getRelativeCoords = (e) => {
@@ -205,7 +221,13 @@ const VideoAnnotator = (props) => {
                 y >= box.y && y <= box.y + box.h
             ) {
                 boxes[index].interpolated = false;
-                manualFrames.add(frame);
+                setManualFrames((prev) => {
+                    const updated = new Map(prev);
+                    const labelSet = new Set(updated.get(frame) || []);
+                    labelSet.add(formatLabel(currentLabel));
+                    updated.set(frame, labelSet);
+                    return updated;
+                });
                 setDraggingIndex(index);
                 setDragOffset({ x: x - box.x, y: y - box.y });
                 return;
@@ -301,7 +323,13 @@ const VideoAnnotator = (props) => {
             return updated;
         });
 
-        setManualFrames(new Set(manualFrames).add(frame));
+        setManualFrames((prev) => {
+            const updated = new Map(prev);
+            const labelSet = new Set(updated.get(frame) || []);
+            labelSet.add(formatLabel(currentLabel));
+            updated.set(frame, labelSet);
+            return updated;
+        });
         setDrawing(false);
     };
 
@@ -311,13 +339,13 @@ const VideoAnnotator = (props) => {
 
         setRedoStack((r) => [...r, {
             annotations: structuredClone(annotations),
-            manualFrames: new Set(manualFrames),
+            manualFrames: new Map(manualFrames),
             labels: structuredClone(labels),
             currentLabel: currentLabel ? structuredClone(currentLabel) : undefined,
         }]);
 
         setAnnotations(prev.annotations);
-        setManualFrames(new Set(prev.manualFrames));
+        setManualFrames(new Map(prev.manualFrames));  // ✅ restore full map
         setLabels(prev.labels);
         setCurrentLabel(prev.currentLabel);
         setHistory((h) => h.slice(0, -1));
@@ -327,15 +355,14 @@ const VideoAnnotator = (props) => {
         if (!redoStack.length) return;
         const next = redoStack[redoStack.length - 1];
 
-        setHistoryFunction()
+        setHistoryFunction();
 
         setAnnotations(next.annotations);
-        setManualFrames(new Set(next.manualFrames));
+        setManualFrames(new Map(next.manualFrames));  // ✅ restore full map
         setLabels(next.labels);
         setCurrentLabel(next.currentLabel);
         setRedoStack((r) => r.slice(0, -1));
     };
-
 
     const exportAnnotations = () => {
         const video = videoRef.current;
@@ -398,6 +425,7 @@ const VideoAnnotator = (props) => {
             annotation: JSON.stringify(exportData),
             labels: JSON.stringify(labels),
             videoRating: JSON.stringify(videoRating),
+            promptRating: JSON.stringify(promptRating),
             videoHeight: JSON.stringify(dimensions.height),
             videoWidth: JSON.stringify(dimensions.width)
         };
@@ -418,13 +446,29 @@ const VideoAnnotator = (props) => {
             // Update annotations and manualFrames
             setAnnotations((prevAnnotations) => {
                 const cleanedAnnotations = {};
-                const updatedManualFrames = new Set();
+                const updatedManualFrames = new Map();
 
-                for (const [frame, boxes] of Object.entries(prevAnnotations)) {
+                for (const [frameStr, boxes] of Object.entries(prevAnnotations)) {
+                    const frame = Number(frameStr);
+
+                    // Remove deleted label's boxes
                     const filteredBoxes = boxes.filter(box => box.label !== deletedLabelStr);
                     if (filteredBoxes.length > 0) {
                         cleanedAnnotations[frame] = filteredBoxes;
-                        updatedManualFrames.add(Number(frame));
+                    }
+
+                    // Update manualFrames if label existed
+                    const currentLabels = manualFrames.get(frame);
+                    if (currentLabels && currentLabels.has(deletedLabelStr)) {
+                        const newLabelSet = new Set(currentLabels);
+                        newLabelSet.delete(deletedLabelStr);
+                        if (newLabelSet.size > 0) {
+                            updatedManualFrames.set(frame, newLabelSet);
+                        }
+                        // else: don't set the frame at all (it's now empty)
+                    } else if (currentLabels) {
+                        // Retain unchanged frame if label wasn't involved
+                        updatedManualFrames.set(frame, currentLabels);
                     }
                 }
 
@@ -435,15 +479,16 @@ const VideoAnnotator = (props) => {
             return updatedLabels;
         });
 
-        setHistoryFunction()
+        setHistoryFunction();
     };
-
 
     // ***** LABEL STUFF ******
     const seekToFrame = (offset) => {
         const video = videoRef.current;
         const fps = video.frameRate || 30;
-        video.currentTime = Math.max(0, video.currentTime + offset / fps);
+        if (video){
+            video.currentTime = Math.max(0, video.currentTime + offset / fps);
+        }
     };
 
     useEffect(() => {
@@ -456,19 +501,81 @@ const VideoAnnotator = (props) => {
     }, [annotations]);
 
     useEffect(() => {
-        if (manualFrames.size < 2) return;
+        const labelToFrames = {};
 
-        const sorted = [...manualFrames].sort((a, b) => a - b);
-        const interpolated = {};
-
-        for (let i = 0; i < sorted.length - 1; i++) {
-            const from = sorted[i], to = sorted[i + 1];
-            if (annotations[from] && annotations[to]) {
-                Object.assign(interpolated, interpolateBoxes(from, to, annotations[from], annotations[to]));
+        for (const [frame, labelSet] of manualFrames.entries()) {
+            for (const label of labelSet) {
+                if (!labelToFrames[label]) labelToFrames[label] = [];
+                labelToFrames[label].push(frame);
             }
         }
 
-        setAnnotations((prev) => ({ ...prev, ...interpolated }));
+        // Sort each label's list of frames
+        for (const label in labelToFrames) {
+            labelToFrames[label].sort((a, b) => a - b);
+        }
+
+        // Step 1: Clean up stale interpolated boxes
+        setAnnotations((prev) => {
+            const cleaned = { ...prev };
+
+            for (const [frameStr, boxes] of Object.entries(cleaned)) {
+                const frame = Number(frameStr);
+
+                cleaned[frame] = boxes.filter((box) => {
+                    if (!box.interpolated) return true;
+
+                    const label = box.label;
+                    const frames = labelToFrames[label] || [];
+
+                    // Must have at least 2 manual anchors to interpolate
+                    if (frames.length < 2) return false;
+
+                    // Remove if outside interpolation range
+                    if (frame <= frames[0] || frame >= frames[frames.length - 1]) return false;
+
+                    return true;
+                });
+
+                // Only delete the frame if it became empty AND it's not a manual frame
+                if (cleaned[frame].length === 0 && !manualFrames.has(frame)) {
+                    delete cleaned[frame];
+                }
+            }
+
+            // Step 2: Recompute interpolated boxes from current anchors
+            const newInterpolated = {};
+            for (const label in labelToFrames) {
+                const frames = labelToFrames[label];
+
+                for (let i = 0; i < frames.length - 1; i++) {
+                    const from = frames[i];
+                    const to = frames[i + 1];
+
+                    const fromBoxes = cleaned[from]?.filter(b => b.label === label && !b.interpolated) || [];
+                    const toBoxes = cleaned[to]?.filter(b => b.label === label && !b.interpolated) || [];
+
+                    if (fromBoxes.length > 0 && toBoxes.length > 0) {
+                        Object.assign(newInterpolated, interpolateBoxes(from, to, fromBoxes, toBoxes));
+                    }
+                }
+            }
+
+            // Step 3: Merge new interpolated boxes
+            for (const [frameStr, interpBoxes] of Object.entries(newInterpolated)) {
+                const frame = Number(frameStr);
+                const existing = cleaned[frame] || [];
+
+                const interpLabels = new Set(interpBoxes.map(box => box.label));
+                const nonMatching = existing.filter(
+                    (box) => !box.interpolated || !interpLabels.has(box.label)
+                );
+
+                cleaned[frame] = [...nonMatching, ...interpBoxes];
+            }
+
+            return cleaned;
+        });
     }, [manualFrames]);
 
     useEffect(() => {
@@ -605,12 +712,20 @@ const VideoAnnotator = (props) => {
                         </Typography>
                     </Stack>
                 </div>
+                <Typography variant="body2" style={{ minWidth: 100 }}>
+                    Video prompt: {props.videoPrompt}
+                </Typography>
+                {boxTooSmallError && (
+                    <Alert severity="warning" sx={{ mt: 1 }}>
+                        Bounding box too small (min {MIN_BOX_AREA} px²). Please draw a larger box.
+                    </Alert>
+                )}
             </div>
             <div style={{
                 position: 'absolute',
                 right: 20,
                 top: 0,
-                bottom: 0,
+                bottom: 100,
                 width: showLabeledFrames ? '260px' : '40px', // expands/collapses width
                 transition: 'width 0.3s ease',
                 zIndex: 10,
@@ -632,95 +747,83 @@ const VideoAnnotator = (props) => {
                 </IconButton>
                 {showLabeledFrames && (
                     <div style={{ overflowY: 'auto', padding: '10px' }}>
-                    <Typography
-                        style={{ margin: '0 0 8px 0' }}
-                    >Labeled Frames</Typography>
-                    {[...manualFrames].sort((a, b) => a - b).map((frame) => (
-                        <div key={frame}
-                             style={{ display: 'flex',
-                                 justifyContent: 'space-between',
-                                 alignItems: 'center',
-                                 marginBottom: '4px'
-                        }}>
-                            <Button
-                                style={{ background: 'none', border: 'none', color: 'blue', cursor: 'pointer' }}
-                                onClick={() => {
-                                    const video = videoRef.current;
-                                    const fps = video.frameRate || 30;
-                                    video.currentTime = frame / fps;
-                                }}
-                            >
-                                {frame}
-                            </Button>
-                            <Button
-                                style={{ background: 'none', border: 'none', color: 'red', cursor: 'pointer' }}
-                                onClick={() => {
-                                    setHistoryFunction()
+                        <Typography style={{ margin: '0 0 8px 0' }}>Labeled Frames</Typography>
 
-                                    setAnnotations((prevAnnotations) => {
-                                        const updated = { ...prevAnnotations };
+                        {Object.entries(
+                            Array.from(manualFrames.entries())
+                                .flatMap(([frame, labelSet]) =>
+                                    [...labelSet].map(label => ({ frame, label }))
+                                )
+                                .reduce((acc, { frame, label }) => {
+                                    if (!acc[label]) acc[label] = [];
+                                    acc[label].push(frame);
+                                    return acc;
+                                }, {})
+                        )
+                            .sort(([aLabel], [bLabel]) => aLabel.localeCompare(bLabel))
+                            .map(([label, frames]) => (
+                                <div key={label} style={{ marginBottom: '10px' }}>
+                                    <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1 }}>
+                                        {label}
+                                    </Typography>
+                                    {frames
+                                        .sort((a, b) => a - b)
+                                        .map((frame) => (
+                                            <div key={`${frame}-${label}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                                <Button
+                                                    style={{ background: 'none', border: 'none', color: 'blue', cursor: 'pointer' }}
+                                                    onClick={() => {
+                                                        const video = videoRef.current;
+                                                        const fps = video.frameRate || 30;
+                                                        if (video) {
+                                                            video.currentTime = frame / fps;
+                                                        }
+                                                    }}
+                                                >
+                                                    Frame {frame}
+                                                </Button>
+                                                <Button
+                                                    style={{ background: 'none', border: 'none', color: 'red', cursor: 'pointer' }}
+                                                    onClick={() => {
+                                                        setHistoryFunction();
 
-                                        const remainingBoxes = updated[frame]?.filter((box) => box.label !== formatLabel(currentLabel));
-                                        if (remainingBoxes && remainingBoxes.length > 0) {
-                                            updated[frame] = remainingBoxes;
-                                        } else {
-                                            delete updated[frame];
-                                        }
+                                                        const updatedManualFrames = new Map(manualFrames);
+                                                        const labelSet = new Set(updatedManualFrames.get(frame));
+                                                        labelSet.delete(label);
+                                                        if (labelSet.size === 0) {
+                                                            updatedManualFrames.delete(frame);
+                                                        } else {
+                                                            updatedManualFrames.set(frame, labelSet);
+                                                        }
+                                                        setManualFrames(updatedManualFrames);
 
-                                        const updatedManualFrames = new Set(manualFrames);
-                                        if (!remainingBoxes || remainingBoxes.length === 0) {
-                                            updatedManualFrames.delete(frame);
-                                        }
-
-                                        const sorted = [...updatedManualFrames].sort((a, b) => a - b);
-                                        const frameIndex = sorted.findIndex((f) => f > frame);
-                                        const prevNeighbor = sorted[frameIndex - 1];
-                                        const nextNeighbor = sorted[frameIndex];
-
-                                        const cleaned = {};
-                                        for (const f of updatedManualFrames) {
-                                            cleaned[f] = updated[f];
-                                        }
-
-                                        for (let f = prevNeighbor + 1; f < nextNeighbor; f++) {
-                                            if (updated[f]?.every((box) => box.interpolated)) {
-                                                delete cleaned[f];
-                                            }
-                                        }
-
-                                        let reinterpolated = {};
-                                        if (
-                                            prevNeighbor !== undefined &&
-                                            nextNeighbor !== undefined &&
-                                            cleaned[prevNeighbor] &&
-                                            cleaned[nextNeighbor]
-                                        ) {
-                                            reinterpolated = interpolateBoxes(
-                                                prevNeighbor,
-                                                nextNeighbor,
-                                                cleaned[prevNeighbor],
-                                                cleaned[nextNeighbor]
-                                            );
-                                        }
-
-                                        // Also update manualFrames safely
-                                        setManualFrames(updatedManualFrames);
-
-                                        return { ...cleaned, ...reinterpolated };
-                                    });
-                                }}
-
-                            >
-                                Delete
-                            </Button>
-                        </div>
-                    ))}
-                </div>
+                                                        setAnnotations((prev) => {
+                                                            const updated = { ...prev };
+                                                            const filtered = (updated[frame] || []).filter(
+                                                                (box) => !(box.label === label && !box.interpolated)
+                                                            );
+                                                            if (filtered.length > 0) {
+                                                                updated[frame] = filtered;
+                                                            } else {
+                                                                delete updated[frame];
+                                                            }
+                                                            return updated;
+                                                        });
+                                                    }}
+                                                >
+                                                    Delete
+                                                </Button>
+                                            </div>
+                                        ))}
+                                </div>
+                            ))}
+                    </div>
                 )}
             </div>
             <div style={{
                 position: 'absolute',
-                bottom: 10, left: 10, zIndex: 10, backgroundColor: '#fff8', padding: '8px' }}>
+                bottom: 10, left: 10, zIndex: 20, backgroundColor: 'rgba(255, 255, 255, 0.85)',
+                padding: '8px' }}>
                 <IconButton
                     size="small"
                     onClick={() => setShowLabelPanel(prev => !prev)}
@@ -748,15 +851,16 @@ const VideoAnnotator = (props) => {
                                     setError={setError}
                                     setCurrentLabel={setCurrentLabel}
                                     setHistoryFunction={setHistoryFunction}
+                                    setTextError={setTextError}
                                 />
                                 {error && (
                                     <Alert severity="error" sx={{ mt: 2 }}>
                                         Maximum of {MAX_LABELS} labels allowed.
                                     </Alert>
                                 )}
-                                {boxTooSmallError && (
-                                    <Alert severity="warning" sx={{ mt: 1 }}>
-                                        Bounding box too small (min {MIN_BOX_AREA} px²). Please draw a larger box.
+                                {textError && (
+                                    <Alert severity="error" sx={{ mt: 1 }}>
+                                        Please input a text description and category for the label.
                                     </Alert>
                                 )}
                             </>
@@ -801,6 +905,8 @@ const VideoAnnotator = (props) => {
                                   submitAnnotationsToDB()
                                   props.setAnnotationState(ANNOTATION_STATE.WAITING_PAGE_FOR_NEXT)
                               }}
+                              videoPrompt={props.videoPrompt}
+                              setPromptRating={setPromptRating}
             />
         </div>
     );

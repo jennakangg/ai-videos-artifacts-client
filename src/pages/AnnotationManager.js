@@ -242,6 +242,7 @@ const AnnotationManager = (props) => {
                         </VideoContainer>
                     ) : annotationState === ANNOTATION_STATE.ANNOTATION ? (
                         <VideoAnnotator videoSrc={`data:video/mpeg;base64,${currVideoData.current.videoData}`}
+                                        videoPrompt={currVideoData.current.videoPrompt}
                                         labels={labels.current}
                                         setAnnotationState={setAnnotationState}
                                         userID={userID}
